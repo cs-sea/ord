@@ -65,6 +65,12 @@ struct QueryWalletBalance {
   name: String,
 }
 
+#[derive(Deserialize, Serialize)]
+struct HexString {
+  hex: String,
+}
+
+
 #[derive(Serialize, Deserialize)]
 struct Runes {}
 
@@ -284,7 +290,7 @@ impl Server {
         .route("/tx/:txid", get(Self::transaction))
         .route("/update", get(Self::update))
         .route("/test", get(Self::test))
-        .route("/decipher/tx/hex/:hex", get(Self::decipher_by_hex))
+        .route("/decipher/tx/hex", post(Self::decipher_by_hex))
         .route("/wallet/balance", get(Self::wallet_balance))
         .fallback(Self::fallback)
         .layer(Extension(index))
@@ -986,10 +992,10 @@ impl Server {
   }
 
   async fn decipher_by_hex(
-    Path(hex): Path<String>,
+    Json(payload): Json<HexString>,
   ) -> ServerResult {
     task::block_in_place(|| {
-      let hex_bytes = hex::decode(hex).unwrap();
+      let hex_bytes = hex::decode(payload.hex).unwrap();
       let transaction: Transaction = deserialize(&hex_bytes).unwrap();
       let res = Runestone::decipher(&transaction);
       Ok(Json(res).into_response())

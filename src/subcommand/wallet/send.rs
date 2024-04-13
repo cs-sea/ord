@@ -301,6 +301,12 @@ impl Send {
       ],
     };
 
+    println!("{}", destination);
+
+    let json_string = serde_json::to_string(&unfunded_transaction).unwrap();
+
+    println!("{:?}", json_string);
+
     let unsigned_transaction =
       fund_raw_transaction(bitcoin_client, fee_rate, &unfunded_transaction)?;
 

@@ -217,6 +217,7 @@ impl Send {
     );
 
     let inscriptions = wallet.inscriptions();
+    println!("{:?}", inscriptions);
     let runic_outputs = wallet.get_runic_outputs()?;
     let bitcoin_client = wallet.bitcoin_client();
 

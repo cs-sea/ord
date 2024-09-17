@@ -217,6 +217,7 @@ impl Send {
     );
 
     let inscriptions = wallet.inscriptions();
+    println!("{:?}", inscriptions);
     let runic_outputs = wallet.get_runic_outputs()?;
     let bitcoin_client = wallet.bitcoin_client();
 
@@ -300,6 +301,12 @@ impl Send {
         },
       ],
     };
+
+    println!("{}", destination);
+
+    let json_string = serde_json::to_string(&unfunded_transaction).unwrap();
+
+    println!("{:?}", json_string);
 
     let unsigned_transaction =
       fund_raw_transaction(bitcoin_client, fee_rate, &unfunded_transaction)?;

@@ -54,10 +54,15 @@ impl WalletConstructor {
         client.load_wallet(&self.name)?;
       }
 
-      Wallet::check_descriptors(&self.name, client.list_descriptors(None)?.descriptors)?;
+      // 验证是不是ord的，好像没用
+      // Wallet::check_descriptors(&self.name, client.list_descriptors(None)?.descriptors)?;
 
       client
     };
+
+    // let address = Address::from_str("bcrt1pxfr22rx0gz3d86mrwvufsrgp4u6mcrm0txym5xmdarh8k22032zqpht6mv").unwrap().require_network(Network::Regtest).unwrap();
+    // let add = bitcoin_client.get_address_info(&address);
+    // println!("{:?}", add);
 
     let chain_block_count = bitcoin_client.get_block_count().unwrap() + 1;
 
@@ -159,6 +164,7 @@ impl WalletConstructor {
   }
 
   fn get_utxos(bitcoin_client: &Client) -> Result<BTreeMap<OutPoint, TxOut>> {
+    println!("{:#?}", bitcoin_client);
     Ok(
       bitcoin_client
         .list_unspent(None, None, None, None, None)?

@@ -39,6 +39,7 @@ use {
     validate_request::ValidateRequestHeaderLayer,
   },
 };
+use bitcoin::consensus::deserialize;
 
 pub(crate) use server_config::ServerConfig;
 
@@ -54,9 +55,34 @@ enum SpawnConfig {
   Redirect(String),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Search {
   query: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct QueryWalletBalance {
+  name: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct HexString {
+  hex: String,
+}
+
+
+#[derive(Serialize, Deserialize)]
+struct Runes {}
+
+#[derive(Serialize, Deserialize)]
+struct QueryWalletBalanceResp {
+  pub cardinal: u64,
+  pub ordinal: u64,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub runes: Option<BTreeMap<SpacedRune, u128>>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub runic: Option<u64>,
+  pub total: u64,
 }
 
 #[derive(RustEmbed)]
@@ -263,6 +289,9 @@ impl Server {
         .route("/status", get(Self::status))
         .route("/tx/:txid", get(Self::transaction))
         .route("/update", get(Self::update))
+        .route("/test", get(Self::test))
+        .route("/decipher/tx/hex", post(Self::decipher_by_hex))
+        .route("/wallet/balance", get(Self::wallet_balance))
         .fallback(Self::fallback)
         .layer(Extension(index))
         .layer(Extension(server_config.clone()))
@@ -885,6 +914,91 @@ impl Server {
       } else {
         Ok(StatusCode::NOT_FOUND.into_response())
       }
+    })
+  }
+
+  async fn test(
+    Json(payload): Json<Search>,
+  ) -> ServerResult {
+    task::block_in_place(|| {
+      Ok(Json(payload).into_response())
+    })
+  }
+
+  async fn wallet_balance(
+    Extension(settings): Extension<Arc<Settings>>,
+    Json(payload): Json<QueryWalletBalance>,
+  ) -> ServerResult {
+    task::block_in_place(|| {
+
+      let rpc_url = "http://localhost";
+      let url = Url::parse(rpc_url).expect("Failed to parse URL");
+      let settings_ref: &Settings = &*settings;
+
+      let wallet = crate::wallet::wallet_constructor::WalletConstructor::construct(
+        payload.name.clone(),
+        true,
+        settings_ref.clone(),
+        url,
+      )?;
+
+      let unspent_outputs = wallet.utxos();
+
+      let inscription_outputs = wallet
+          .inscriptions()
+          .keys()
+          .map(|satpoint| satpoint.outpoint)
+          .collect::<BTreeSet<OutPoint>>();
+
+      let mut cardinal = 0;
+      let mut ordinal = 0;
+      let mut runes = BTreeMap::new();
+      let mut runic = 0;
+
+      for (output, txout) in unspent_outputs {
+        let rune_balances = wallet.get_runes_balances_for_output(output)?;
+
+        let is_ordinal = inscription_outputs.contains(output);
+        let is_runic = !rune_balances.is_empty();
+
+        if is_ordinal {
+          ordinal += txout.value;
+        }
+
+        if is_runic {
+          for (spaced_rune, pile) in rune_balances {
+            *runes.entry(spaced_rune).or_default() += pile.amount;
+          }
+          runic += txout.value;
+        }
+
+        if !is_ordinal && !is_runic {
+          cardinal += txout.value;
+        }
+
+        if is_ordinal && is_runic {
+          eprintln!("warning: output {output} contains both inscriptions and runes");
+        }
+      }
+
+      Ok(Json(QueryWalletBalanceResp{
+        cardinal: cardinal,
+        ordinal: ordinal,
+        runes: wallet.has_rune_index().then_some(runes),
+        runic: wallet.has_rune_index().then_some(runic),
+        total: cardinal + ordinal + runic,
+      }).into_response())
+    })
+  }
+
+  async fn decipher_by_hex(
+    Json(payload): Json<HexString>,
+  ) -> ServerResult {
+    task::block_in_place(|| {
+      let hex_bytes = hex::decode(payload.hex).unwrap();
+      let transaction: Transaction = deserialize(&hex_bytes).unwrap();
+      let res = Runestone::decipher(&transaction);
+      Ok(Json(res).into_response())
     })
   }
 
